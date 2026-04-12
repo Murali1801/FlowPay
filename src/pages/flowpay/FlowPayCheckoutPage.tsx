@@ -33,6 +33,7 @@ export default function FlowPayCheckoutPage() {
   const navigate = useNavigate();
   const { user, logOut } = useAuth();
   const [phase, setPhase] = useState<"splash" | "main">("splash");
+  const [order, setOrder] = useState<any>(null);
   const [amount, setAmount] = useState<string | null>(null);
   const [status, setStatus] = useState<string>("Pending");
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -87,6 +88,7 @@ export default function FlowPayCheckoutPage() {
       try {
         const o = await getOrder(orderId);
         if (cancelled) return;
+        setOrder(o);
         setAmount(o.amount);
         setStatus(o.status);
         if (o.status === "Paid") {
@@ -152,6 +154,7 @@ export default function FlowPayCheckoutPage() {
         mrp={prices.mrpStr}
         discount={prices.discountStr}
         subtotal={prices.subStr}
+        items={order?.items}
       />
 
       <header className={s.header}>
@@ -195,9 +198,17 @@ export default function FlowPayCheckoutPage() {
             <div className={s.addrLeft}>
               <MapPin size={20} className={s.pin} />
               <div>
-                <div className={s.deliver}>DELIVERING TO</div>
-                <div className={s.addrText}>Murali Krishna, 4th Floor, VR Enclave...</div>
-                <div className={s.addrMeta}>+91 99XXXXXX00 · murali@example.com</div>
+                <div className={s.deliver}>
+                  DELIVERING TO {order?.shipping_address?.full_name || order?.customer_details?.name || "CUSTOMER"}
+                </div>
+                <div className={s.addrText}>
+                  {order?.shipping_address
+                    ? `${order.shipping_address.address_line_1}, ${order.shipping_address.city}, ${order.shipping_address.state} - ${order.shipping_address.pincode}`
+                    : "Fetching address details..."}
+                </div>
+                <div className={s.addrMeta}>
+                  {order?.customer_details?.phone || order?.shipping_address?.phone || "+91 XXXXXXXXXX"} · {order?.customer_details?.email || "customer@example.com"}
+                </div>
               </div>
             </div>
             <button type="button" className={s.changeBtn}>CHANGE</button>

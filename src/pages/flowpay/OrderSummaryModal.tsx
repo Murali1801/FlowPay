@@ -1,15 +1,27 @@
 import { COPY } from "./copy";
 import s from "./FlowPayCheckoutPage.module.css";
 
+function fmt(n: number) {
+  return n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 type Props = {
   open: boolean;
   onClose: () => void;
   mrp: string;
   discount: string;
   subtotal: string;
+  items?: any[];
 };
 
-export default function OrderSummaryModal({ open, onClose, mrp, discount, subtotal }: Props) {
+export default function OrderSummaryModal({
+  open,
+  onClose,
+  mrp,
+  discount,
+  subtotal,
+  items,
+}: Props) {
   if (!open) return null;
   return (
     <div className={s.modalRoot} role="dialog" aria-modal="true" aria-labelledby="fp-modal-title">
@@ -26,17 +38,37 @@ export default function OrderSummaryModal({ open, onClose, mrp, discount, subtot
             {COPY.modalOrderSummary}
           </h2>
         </div>
-        <div className={s.modalProduct}>
-          <div className={s.thumb} />
-          <div className={s.modalProdMeta}>
-            <div className={s.modalProdName}>{COPY.productName}</div>
-            <div className={s.modalQty}>{COPY.qty}</div>
+        {items && items.length > 0 ? (
+          <div className={s.itemsContainer}>
+            {items.map((item, idx) => (
+              <div key={idx} className={s.modalProduct}>
+                <div 
+                  className={s.thumb} 
+                  style={item.image ? { backgroundImage: `url(${item.image})`, backgroundSize: 'cover' } : {}} 
+                />
+                <div className={s.modalProdMeta}>
+                  <div className={s.modalProdName}>{item.name}</div>
+                  <div className={s.modalQty}>Qty: {item.quantity}</div>
+                </div>
+                <div className={s.modalProdPrices}>
+                  <span className={s.boldPrice}>₹{fmt(Number(item.price) * item.quantity)}</span>
+                </div>
+              </div>
+            ))}
           </div>
-          <div className={s.modalProdPrices}>
-            <span className={s.strike}>₹{mrp}</span>
-            <span className={s.boldPrice}>₹{subtotal}</span>
+        ) : (
+          <div className={s.modalProduct}>
+            <div className={s.thumb} />
+            <div className={s.modalProdMeta}>
+              <div className={s.modalProdName}>{COPY.productName}</div>
+              <div className={s.modalQty}>{COPY.qty}</div>
+            </div>
+            <div className={s.modalProdPrices}>
+              <span className={s.strike}>₹{mrp}</span>
+              <span className={s.boldPrice}>₹{subtotal}</span>
+            </div>
           </div>
-        </div>
+        )}
         <table className={s.breakdown}>
           <tbody>
             <tr>

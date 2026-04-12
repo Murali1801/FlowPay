@@ -1,12 +1,37 @@
 /** Production: set `VITE_API_BASE_URL` to your API origin (no trailing slash), e.g. https://flowpay-api.onrender.com */
 const base = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
+export type OrderItem = {
+  name: string;
+  quantity: number;
+  price: number;
+  image?: string;
+};
+
+export type ShippingAddress = {
+  full_name: string;
+  address_line_1: string;
+  address_line_2?: string;
+  city: string;
+  state: string;
+  pincode: string;
+};
+
+export type CustomerDetails = {
+  name?: string;
+  email?: string;
+  phone?: string;
+};
+
 export type Order = {
   order_id: string;
   amount: string;
   status: string;
   utr_number: string | null;
   merchant_id?: string | null;
+  customer_details?: CustomerDetails;
+  shipping_address?: ShippingAddress;
+  items?: OrderItem[];
 };
 
 export type UserProfile = {
