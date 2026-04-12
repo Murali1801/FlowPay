@@ -19,7 +19,15 @@ class SyncService : Service() {
             .setOngoing(true)
             .build()
 
-        startForeground(NOTIFICATION_ID, notification)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(
+                NOTIFICATION_ID, 
+                notification, 
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
 
         return START_STICKY
     }
@@ -35,12 +43,25 @@ class SyncService : Service() {
             )
             val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(serviceChannel)
+
+            val alertChannel = NotificationChannel(
+                ALERTS_CHANNEL_ID,
+                "Payment Alerts",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Notifies when a payment is successfully verified"
+                enableLights(true)
+                lightColor = android.graphics.Color.GREEN
+            }
+            manager.createNotificationChannel(alertChannel)
         }
     }
 
     companion object {
         const val CHANNEL_ID = "FlowPaySyncChannel"
+        const val ALERTS_CHANNEL_ID = "FlowPayAlertsChannel"
         const val NOTIFICATION_ID = 1001
+        const val ALERT_NOTIF_ID = 1002
 
         fun start(context: Context) {
             val intent = Intent(context, SyncService::class.java)

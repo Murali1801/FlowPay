@@ -22,6 +22,18 @@ class ConfigManager(context: Context) {
         get() = prefs.getString("last_sync_log", "No syncs yet") ?: "No syncs yet"
         set(value) = prefs.edit().putString("last_sync_log", value).apply()
 
+    var customRegex: String
+        get() = prefs.getString("custom_regex", "(?i)(?:Amount|Rs|INR|₹)\\.?\\s*([\\d,]+\\.?\\d*)") ?: "(?i)(?:Amount|Rs|INR|₹)\\.?\\s*([\\d,]+\\.?\\d*)"
+        set(value) = prefs.edit().putString("custom_regex", value).apply()
+
+    var useCustomRegex: Boolean
+        get() = prefs.getBoolean("use_custom_regex", false)
+        set(value) = prefs.edit().putBoolean("use_custom_regex", value).apply()
+
+    var isFirstRun: Boolean
+        get() = prefs.getBoolean("is_first_run", true)
+        set(value) = prefs.edit().putBoolean("is_first_run", value).apply()
+
     fun addLog(log: String) {
         val current = lastSyncLog
         val newLog = "[${System.currentTimeMillis()}] $log\n${current.take(2000)}"

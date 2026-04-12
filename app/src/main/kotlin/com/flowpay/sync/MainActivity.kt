@@ -3,15 +3,10 @@ package com.flowpay.sync
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -22,14 +17,26 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.navigation.compose.*
 import com.flowpay.sync.data.ConfigManager
+import com.flowpay.sync.network.*
+import com.flowpay.sync.ui.screens.*
 import com.flowpay.sync.ui.theme.*
+import kotlinx.coroutines.delay
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
+
+sealed class Screen(val route: String, val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    object Dashboard : Screen("dashboard", "Home", Icons.Default.Dashboard)
+    object Sync : Screen("sync", "Sync", Icons.Default.Sync)
+    object Transactions : Screen("transactions", "Orders", Icons.Default.ReceiptLong)
+    object Settings : Screen("settings", "Settings", Icons.Default.Settings)
+}
 
 class MainActivity : ComponentActivity() {
     private lateinit var config: ConfigManager
@@ -43,13 +50,16 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             FlowPayTheme {
-                MainScreen(config)
+                MainApp(config)
             }
         }
     }
 
     private fun checkPermissions() {
-        val perms = arrayOf(Manifest.permission.RECEIVE_SMS, Manifest.permission.READ_SMS)
+        val perms = mutableListOf(Manifest.permission.RECEIVE_SMS, Manifest.permission.READ_SMS)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            perms.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
         val missing = perms.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
@@ -74,172 +84,132 @@ fun FlowPayTheme(content: @Composable () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(config: ConfigManager) {
-    var url by remember { mutableStateOf(config.webhookUrl) }
-    var token by remember { mutableStateOf(config.bearerToken) }
-    var filters by remember { mutableStateOf(config.senderFilter) }
-    var logs by remember { mutableStateOf(config.lastSyncLog) }
+fun MainApp(config: ConfigManager) {
+    val navController = rememberNavController()
+    var stats by remember { mutableStateOf<StatsResponse?>(null) }
+    var orders by remember { mutableStateOf<List<OrderRow>>(emptyList()) }
+    var showOnboarding by remember { mutableStateOf(config.isFirstRun) }
+
+    val retrofit = remember {
+        Retrofit.Builder()
+            .baseUrl("https://flowpay-api.onrender.com") // Fallback, usually dynamic
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+    }
+    val api = remember { retrofit.create(FlowPayApi::class.java) }
+
+    val loadData = {
+        scope.launch {
+            try {
+                val token = "Bearer ${config.bearerToken}"
+                val statsRes = api.getStats(token)
+                if (statsRes.isSuccessful) stats = statsRes.body()
+                
+                val ordersRes = api.getOrders(token)
+                if (ordersRes.isSuccessful) orders = ordersRes.body() ?: emptyList()
+            } catch (e: Exception) { /* ignored */ }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            loadData()
+            delay(30000) // Poll every 30s
+        }
+    }
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            CenterAlignedTopAppBar(
                 title = { 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             modifier = Modifier
-                                .size(32.dp)
-                                .clip(RoundedCornerShape(8.dp))
+                                .size(28.dp)
+                                .clip(RoundedCornerShape(6.dp))
                                 .background(Brush.linearGradient(listOf(Teal, Indigo))),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("FP", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("FP", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         }
-                        Spacer(Modifier.width(10.dp))
-                        Text("FlowPay Sync", fontWeight = FontWeight.ExtraBold)
+                        Spacer(Modifier.width(8.dp))
+                        Text("FlowPay Hub", fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface)
+                actions = {
+                    IconButton(onClick = { loadData() }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                    }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Surface)
             )
+        },
+        bottomBar = {
+            NavigationBar(containerColor = Surface, tonalElevation = 8.dp) {
+                val navBackStackEntry by navController.currentBackStackEntryAsState()
+                val currentRoute = navBackStackEntry?.destination?.route
+                val items = listOf(Screen.Dashboard, Screen.Transactions, Screen.Sync, Screen.Settings)
+                
+                items.forEach { screen ->
+                    NavigationBarItem(
+                        icon = { Icon(screen.icon, contentDescription = screen.title) },
+                        label = { Text(screen.title, fontSize = 10.sp, fontWeight = FontWeight.Bold) },
+                        selected = currentRoute == screen.route,
+                        onClick = {
+                            navController.navigate(screen.route) {
+                                popUpTo(navController.graph.startDestinationId)
+                                launchSingleTop = true
+                            }
+                        },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = Teal,
+                            selectedTextColor = Teal,
+                            unselectedIconColor = TextSecondary,
+                            unselectedTextColor = TextSecondary,
+                            indicatorColor = Teal.copy(alpha = 0.1f)
+                        )
+                    )
+                }
+            }
         }
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize()
-                .background(Background)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            item {
-                StatusCard()
-            }
-
-            item {
-                ConfigSection(
-                    url = url, onUrlChange = { url = it },
-                    token = token, onTokenChange = { token = it },
-                    filters = filters, onFiltersChange = { filters = it },
-                    onSave = {
-                        config.webhookUrl = url
-                        config.bearerToken = token
-                        config.senderFilter = filters
-                        logs = config.lastSyncLog // Refresh logs
-                    }
-                )
-            }
-
-            item {
-                Text(
-                    "Recent Activity",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextSecondary,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
-            }
-
-            item {
-                LogCard(logs)
-            }
+        NavHost(navController, startDestination = Screen.Dashboard.route, modifier = Modifier.padding(padding)) {
+            composable(Screen.Dashboard.route) { DashboardScreen(stats, orders) }
+            composable(Screen.Transactions.route) { TransactionsScreen(orders) }
+            composable(Screen.Sync.route) { SyncScreen(config, onNavigateToRegex = { navController.navigate("regex_editor") }) }
+            composable(Screen.Settings.route) { SettingsScreen() }
+            composable("regex_editor") { RegexEditorScreen(config, onBack = { navController.popBackStack() }) }
         }
+    }
+
+    if (showOnboarding) {
+        OnboardingScreen(onDismiss = {
+            config.isFirstRun = false
+            showOnboarding = false
+        })
     }
 }
 
 @Composable
-fun StatusCard() {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Surface),
-        elevation = CardDefaults.cardElevation(2.dp)
+fun TransactionsScreen(orders: List<OrderRow>) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().background(Background).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(
-            modifier = Modifier.padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(12.dp)
-                    .clip(CircleShape)
-                    .background(Green)
-            )
-            Spacer(Modifier.width(12.dp))
-            Column {
-                Text("Sync Engine Active", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Text("Listening for bank SMS messages...", color = TextSecondary, fontSize = 13.sp)
-            }
+        item {
+            Text("Order History", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+        }
+        if (orders.isEmpty()) {
+            item { Text("No transactions found.", modifier = Modifier.padding(top = 20.dp), color = TextSecondary) }
+        } else {
+            items(orders) { OrderListItem(it) }
         }
     }
 }
 
 @Composable
-fun ConfigSection(
-    url: String, onUrlChange: (String) -> Unit,
-    token: String, onTokenChange: (String) -> Unit,
-    filters: String, onFiltersChange: (String) -> Unit,
-    onSave: () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Surface),
-        elevation = CardDefaults.cardElevation(2.dp)
-    ) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            ConfigField("Webhook URL", url, onUrlChange, Icons.Default.Link, "https://...")
-            ConfigField("Bearer Token", token, onTokenChange, Icons.Default.Lock, "Paste token here")
-            ConfigField("Sender Filters", filters, onFiltersChange, Icons.Default.FilterList, "HDFCBK, SBIPAY...")
-            
-            Button(
-                onClick = onSave,
-                modifier = Modifier.fillMaxWidth().height(50.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Teal)
-            ) {
-                Icon(Icons.Default.Save, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Save Configuration", fontWeight = FontWeight.Bold)
-            }
-        }
-    }
-}
-
-@Composable
-fun ConfigField(label: String, value: String, onValueChange: (String) -> Unit, icon: ImageVector, placeholder: String) {
-    Column {
-        Text(label, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextSecondary, modifier = Modifier.padding(bottom = 6.dp))
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(10.dp),
-            placeholder = { Text(placeholder, fontSize = 14.sp) },
-            leadingIcon = { Icon(icon, contentDescription = null, size(20.dp), tint = TextSecondary) },
-            colors = OutlinedTextFieldDefaults.colors(
-                unfocusedBorderColor = Border,
-                focusedBorderColor = Teal
-            ),
-            singleLine = true
-        )
-    }
-}
-
-@Composable
-fun LogCard(logs: String) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Surface),
-        elevation = CardDefaults.cardElevation(2.dp)
-    ) {
-        Box(Modifier.padding(16.dp).heightIn(min = 100.dp)) {
-            Text(
-                logs,
-                fontSize = 13.sp,
-                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                color = TextSecondary,
-                lineHeight = 18.sp
-            )
-        }
+fun SettingsScreen() {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text("Account Settings & API Keys coming soon.")
     }
 }

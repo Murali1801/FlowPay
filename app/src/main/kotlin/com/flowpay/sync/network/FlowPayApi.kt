@@ -1,10 +1,7 @@
 package com.flowpay.sync.network
 
 import retrofit2.Response
-import retrofit2.http.Body
-import retrofit2.http.Header
-import retrofit2.http.POST
-import retrofit2.http.Url
+import retrofit2.http.*
 
 interface FlowPayApi {
     @POST
@@ -12,5 +9,15 @@ interface FlowPayApi {
         @Url url: String,
         @Header("Authorization") bearerToken: String,
         @Body payload: SmsPayload
-    ): Response<SmsResponse>
+    ): Response<Unit>
+
+    @GET("api/admin/stats")
+    suspend fun getStats(
+        @Header("Authorization") bearerToken: String
+    ): Response<StatsResponse>
+
+    @GET("api/admin/orders")
+    suspend fun getOrders(
+        @Header("Authorization") bearerToken: String
+    ): Response<List<OrderRow>>
 }

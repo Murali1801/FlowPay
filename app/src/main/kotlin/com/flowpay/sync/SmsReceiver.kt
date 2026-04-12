@@ -13,6 +13,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import java.util.regex.Pattern
 
 class SmsReceiver : BroadcastReceiver() {
@@ -54,11 +56,19 @@ class SmsReceiver : BroadcastReceiver() {
     }
 
     private fun extractAmount(body: String): Double? {
-        val patterns = listOf(
+        val patterns = mutableListOf(
             Pattern.compile("(?i)(?:Rs|INR|₹)\\.?\\s*([\\d,]+\\.?\\d*)"),
             Pattern.compile("(?i)amounted\\s+to\\s+(?:Rs|INR|₹)?\\s*([\\d,]+\\.?\\d*)"),
             Pattern.compile("(?i)received\\s+(?:Rs|INR|₹)?\\s*([\\d,]+\\.?\\d*)")
         )
+        
+        if (config.useCustomRegex && config.customRegex.isNotBlank()) {
+            try {
+                patterns.add(0, Pattern.compile(config.customRegex))
+            } catch (e: Exception) {
+                Log.e("SmsReceiver", "Invalid custom regex: ${config.customRegex}")
+            }
+        }
         for (p in patterns) {
             val m = p.matcher(body)
             if (m.find()) {
@@ -71,7 +81,8 @@ class SmsReceiver : BroadcastReceiver() {
     private fun extractUtr(body: String): String? {
         val patterns = listOf(
             Pattern.compile("(?i)(?:UTR|Ref|Ref\\s*No|Transaction\\s*ID)\\s*:?\\s*([a-zA-Z0-9]{8,22})"),
-            Pattern.compile("(?i)(\\d{12,14})") // Common 12-digit UTR
+            Pattern.compile("(?i)UTR[:\\s]*([0-9]{12})"),
+            Pattern.compile("(?i)(\\d{12,14})")
         )
         for (p in patterns) {
             val m = p.matcher(body)
@@ -100,12 +111,29 @@ class SmsReceiver : BroadcastReceiver() {
                 val response = api.syncSms(url, bearer, SmsPayload(amount, utr))
                 if (response.isSuccessful) {
                     config.addLog("✅ Sync Success: ₹$amount")
+                    showNotification(context, amount, utr)
                 } else {
                     config.addLog("❌ Sync Failed: ${response.code()} ${response.errorBody()?.string()}")
                 }
             } catch (e: Exception) {
                 config.addLog("❌ Network Error: ${e.message}")
             }
+        }
+    }
+
+    private fun showNotification(context: Context, amount: Double, utr: String) {
+        val notification = NotificationCompat.Builder(context, SyncService.ALERTS_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setContentTitle("Payment Verified: ₹$amount")
+            .setContentText("UTR: $utr has been synced successfully.")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .build()
+        
+        try {
+            NotificationManagerCompat.from(context).notify(SyncService.ALERT_NOTIF_ID, notification)
+        } catch (e: SecurityException) {
+            Log.e("SmsReceiver", "Notification permission missing")
         }
     }
 }
