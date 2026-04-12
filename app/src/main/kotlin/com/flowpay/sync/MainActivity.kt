@@ -22,7 +22,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.navigation.compose.*
+import kotlinx.coroutines.launch
 import com.flowpay.sync.data.ConfigManager
 import com.flowpay.sync.network.*
 import com.flowpay.sync.ui.screens.*
@@ -86,6 +89,7 @@ fun FlowPayTheme(content: @Composable () -> Unit) {
 @Composable
 fun MainApp(config: ConfigManager) {
     val navController = rememberNavController()
+    val scope = rememberCoroutineScope()
     var stats by remember { mutableStateOf<StatsResponse?>(null) }
     var orders by remember { mutableStateOf<List<OrderRow>>(emptyList()) }
     var showOnboarding by remember { mutableStateOf(config.isFirstRun) }

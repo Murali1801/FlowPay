@@ -44,18 +44,18 @@ class SmsReceiver : BroadcastReceiver() {
     }
 
     private fun processSms(context: Context, config: ConfigManager, body: String) {
-        val amount = extractAmount(body)
+        val amount = extractAmount(config, body)
         val utr = extractUtr(body)
 
         if (amount != null && utr != null) {
             config.addLog("Match found: ₹$amount, UTR: $utr")
-            syncToBackend(config, amount, utr)
+            syncToBackend(context, config, amount, utr)
         } else {
             Log.d("SmsReceiver", "No match in body: amount=$amount, utr=$utr")
         }
     }
 
-    private fun extractAmount(body: String): Double? {
+    private fun extractAmount(config: ConfigManager, body: String): Double? {
         val patterns = mutableListOf(
             Pattern.compile("(?i)(?:Rs|INR|₹)\\.?\\s*([\\d,]+\\.?\\d*)"),
             Pattern.compile("(?i)amounted\\s+to\\s+(?:Rs|INR|₹)?\\s*([\\d,]+\\.?\\d*)"),
@@ -93,7 +93,7 @@ class SmsReceiver : BroadcastReceiver() {
         return null
     }
 
-    private fun syncToBackend(config: ConfigManager, amount: Double, utr: String) {
+    private fun syncToBackend(context: Context, config: ConfigManager, amount: Double, utr: String) {
         val url = config.webhookUrl
         val token = config.bearerToken
         if (url.isBlank() || token.isBlank()) return

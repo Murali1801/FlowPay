@@ -14,8 +14,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.lazy.items
 import com.flowpay.sync.network.OrderRow
 import com.flowpay.sync.network.StatsResponse
 import com.flowpay.sync.ui.theme.*
@@ -89,7 +91,7 @@ fun KpiGrid(stats: StatsResponse?) {
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             KpiCard("Total Orders", stats?.totalOrders?.toString() ?: "0", Icons.Default.ShoppingCart, Indigo, Modifier.weight(1f))
-            KpiCard("Pending", stats?.pending?.toString() ?: "0", Icons.Default.ClockLoaderToday, Orange, Modifier.weight(1f))
+            KpiCard("Pending", stats?.pending?.toString() ?: "0", Icons.Default.Schedule, Orange, Modifier.weight(1f))
         }
     }
 }

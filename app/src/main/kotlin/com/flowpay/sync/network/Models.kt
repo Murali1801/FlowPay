@@ -17,7 +17,3 @@ data class OrderRow(
     @SerializedName("created_at") val createdAt: String?
 )
 
-data class SmsPayload(
-    val amount: Double,
-    val utr: String
-)

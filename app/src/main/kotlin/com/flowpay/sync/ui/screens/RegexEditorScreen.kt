@@ -81,7 +81,8 @@ fun RegexEditorScreen(config: ConfigManager, onBack: () -> Unit) {
                     colors = OutlinedTextFieldDefaults.colors(
                         unfocusedBorderColor = Border,
                         focusedBorderColor = Teal,
-                        containerColor = Surface
+                        unfocusedContainerColor = Surface,
+                        focusedContainerColor = Surface
                     ),
                     textStyle = LocalTextStyle.current.copy(
                         fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,

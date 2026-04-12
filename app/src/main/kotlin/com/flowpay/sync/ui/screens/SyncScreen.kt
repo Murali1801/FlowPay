@@ -16,10 +16,16 @@ import com.flowpay.sync.network.FlowPayApi
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import com.flowpay.sync.data.ConfigManager
 import com.flowpay.sync.ui.theme.*
 
@@ -125,7 +131,6 @@ fun StatusCard() {
             Box(
                 modifier = Modifier
                     .size(12.dp)
-                    .background(Green, RoundedCornerShape(full)) // full from theme or 50%
                     .clip(RoundedCornerShape(6.dp))
                     .background(Green)
             )
