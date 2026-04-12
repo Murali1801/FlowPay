@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">FlowPay Sync</string>
+    <string name="webhook_url_label">Webhook URL</string>
+    <string name="bearer_token_label">Bearer Token</string>
+    <string name="save_config">Save Configuration</string>
+    <string name="sync_status_active">Direct Sync Active</string>
+    <string name="sync_status_idle">Sync Idle</string>
+</resources>
