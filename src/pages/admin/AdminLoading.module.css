@@ -1,0 +1,8 @@
+.root {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 0.9rem;
+}

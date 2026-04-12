@@ -1,0 +1,38 @@
+# =========================
+# Frontend (Node / Vite / React)
+# =========================
+node_modules/
+dist/
+dist-ssr/
+build/
+.env
+.env.local
+.env.*.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Caches
+.eslintcache
+.vite/
+
+# Security & Credentials
+*firebase-adminsdk*.json
+flowpay-a0c14-firebase-adminsdk*.json
+*.pem
+*.cert
+*.key
+
+# OS & IDE Files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
