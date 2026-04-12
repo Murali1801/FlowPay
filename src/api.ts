@@ -1,5 +1,4 @@
-/** Production: set `VITE_API_BASE_URL` to your API origin (no trailing slash), e.g. https://flowpay-api.onrender.com */
-const base = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
+const base = (import.meta.env.VITE_API_BASE_URL || "https://flow-pay-api.vercel.app").replace(/\/$/, "");
 
 export type OrderItem = {
   name: string;
