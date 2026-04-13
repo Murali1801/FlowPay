@@ -11,7 +11,7 @@ export function buildUpiLink(
   const params = new URLSearchParams({
     pa,
     pn,
-    am: amount,
+    am: amount.replace(/,/g, ""),
     cu: "INR",
   });
   if (options?.note) params.set("tn", options.note);
