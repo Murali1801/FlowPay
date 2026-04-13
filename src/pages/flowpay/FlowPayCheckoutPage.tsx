@@ -92,7 +92,7 @@ export default function FlowPayCheckoutPage() {
         setAmount(o.amount);
         setStatus(o.status);
         if (o.status === "Paid") {
-          navigate(`/success/${orderId}`, { replace: true });
+          navigate(`/success/${orderId}`, { replace: true, state: { returnUrl: o.return_url } });
         }
       } catch {
         if (!cancelled) setLoadError("Unable to load checkout. Please try again.");
@@ -108,7 +108,7 @@ export default function FlowPayCheckoutPage() {
         const o = await getOrder(orderId);
         setStatus(o.status);
         if (o.status === "Paid") {
-          navigate(`/success/${orderId}`, { replace: true });
+          navigate(`/success/${orderId}`, { replace: true, state: { returnUrl: o.return_url } });
         }
       } catch { /* ignored */ }
     }, POLL_MS);

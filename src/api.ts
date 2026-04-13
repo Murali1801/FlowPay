@@ -31,6 +31,7 @@ export type Order = {
   customer_details?: CustomerDetails;
   shipping_address?: ShippingAddress;
   items?: OrderItem[];
+  return_url?: string | null;
 };
 
 export type UserProfile = {
@@ -84,12 +85,13 @@ async function parseError(res: Response): Promise<string> {
 
 export async function checkout(
   amount: string,
-  opts?: { apiKey?: string; merchantId?: string }
-): Promise<{ order_id: string; amount: string }> {
+  opts?: { apiKey?: string; merchantId?: string; returnUrl?: string }
+): Promise<{ order_id: string; amount: string; return_url?: string | null }> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (opts?.apiKey) headers["X-API-Key"] = opts.apiKey;
   const body: Record<string, unknown> = { amount: Number(amount) };
   if (opts?.merchantId) body.merchant_id = opts.merchantId;
+  if (opts?.returnUrl) body.return_url = opts.returnUrl;
   const res = await fetch(`${base}/api/checkout`, {
     method: "POST",
     headers,

@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { CheckCircle, ShoppingBag, ExternalLink, ArrowRight } from "lucide-react";
+import { Link, useLocation, useParams } from "react-router-dom";
+import { CheckCircle, ShoppingBag, ExternalLink, ArrowRight, Store } from "lucide-react";
 import { getOrder } from "../api";
 import styles from "./SuccessPage.module.css";
 
 export default function SuccessPage() {
   const { orderId } = useParams<{ orderId: string }>();
+  const location = useLocation();
   const [amount, setAmount] = useState<string | null>(null);
   const [utr, setUtr] = useState<string | null>(null);
+  const [returnUrl, setReturnUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!orderId) return;
@@ -18,10 +20,13 @@ export default function SuccessPage() {
         if (cancelled) return;
         setAmount(o.amount);
         setUtr(o.utr_number);
+        // Prefer return_url stored on order; fall back to router state
+        const routeState = (location.state as { returnUrl?: string | null } | null)?.returnUrl;
+        setReturnUrl(o.return_url || routeState || null);
       } catch { /* ignored */ }
     })();
     return () => { cancelled = true; };
-  }, [orderId]);
+  }, [orderId, location.state]);
 
   return (
     <div className={styles.wrap}>
@@ -56,9 +61,20 @@ export default function SuccessPage() {
         </div>
 
         <div className={styles.btnRow}>
-          <Link className={styles.btn} to="/">
-            Continue Shopping <ArrowRight size={18} style={{ marginLeft: 8 }} />
-          </Link>
+          {returnUrl ? (
+            <a
+              href={returnUrl}
+              className={styles.btn}
+              style={{ display: "flex", alignItems: "center", gap: 8 }}
+            >
+              <Store size={18} />
+              View My Orders <ArrowRight size={18} style={{ marginLeft: 4 }} />
+            </a>
+          ) : (
+            <Link className={styles.btn} to="/">
+              Continue Shopping <ArrowRight size={18} style={{ marginLeft: 8 }} />
+            </Link>
+          )}
           <button className={styles.secondaryBtn} onClick={() => window.print()}>
             Download Receipt
           </button>
@@ -67,9 +83,11 @@ export default function SuccessPage() {
         <div className={styles.footer}>
           <p>A confirmation email has been sent to your registered address.</p>
           <div style={{ marginTop: 12, display: "flex", justifyContent: "center", gap: 16 }}>
-            <a href="#" style={{ color: "var(--text-4)", textDecoration: "none", display: "flex", gap: 4, alignItems: "center" }}>
-              <ShoppingBag size={12} /> View Orders
-            </a>
+            {returnUrl && (
+              <a href={returnUrl} style={{ color: "var(--text-4)", textDecoration: "none", display: "flex", gap: 4, alignItems: "center" }}>
+                <ShoppingBag size={12} /> View Orders
+              </a>
+            )}
             <a href="#" style={{ color: "var(--text-4)", textDecoration: "none", display: "flex", gap: 4, alignItems: "center" }}>
               <ExternalLink size={12} /> Contact Support
             </a>
