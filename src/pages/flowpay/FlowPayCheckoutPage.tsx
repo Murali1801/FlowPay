@@ -1,86 +1,55 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useEffect, useMemo, useState, useCallback } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import QRCode from "react-qr-code";
 import {
-  ChevronLeft, ShieldCheck, MapPin, ShoppingCart, Tag,
-  LogOut, Smartphone, Copy,
-  Eye
+  ShieldCheck, MapPin, Package, Tag, Smartphone,
+  Copy, Eye, EyeOff, CheckCircle, Clock, ChevronDown,
+  ChevronUp, User, Phone, Mail, Home, Loader2
 } from "lucide-react";
 import { getOrder } from "../../api";
-import { useAuth } from "../../contexts/AuthContext";
 import { buildUpiLink } from "../../upi";
 import FlowPaySplash from "./FlowPaySplash";
 import { FlowPayMarkSmall } from "./FlowPayMark";
-import OrderSummaryModal from "./OrderSummaryModal";
 import s from "./FlowPayCheckoutPage.module.css";
 
 const PA = import.meta.env.VITE_UPI_PA ?? "your_gpay_id@okbank";
 const PN = import.meta.env.VITE_UPI_PN ?? "Your Name";
-
 const POLL_MS = 4000;
 
 function fmt(n: number) {
   return n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
-
 function parseAmount(s: string) {
   const v = parseFloat(s.replace(/,/g, ""));
   return Number.isFinite(v) ? v : 0;
+}
+function formatPhone(ph?: string) {
+  if (!ph) return null;
+  const t = ph.trim();
+  return /^\d{10}$/.test(t) ? `+91 ${t}` : t;
 }
 
 export default function FlowPayCheckoutPage() {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
-  const { user, logOut } = useAuth();
+
   const [phase, setPhase] = useState<"splash" | "main">("splash");
   const [order, setOrder] = useState<any>(null);
-  const [amount, setAmount] = useState<string | null>(null);
-  const [status, setStatus] = useState<string>("Pending");
+  const [status, setStatus] = useState("Pending");
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [showQr, setShowQr] = useState(false);
-  const [orderSummaryOpen, setOrderSummaryOpen] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(false);
   const [coupon, setCoupon] = useState("");
   const [couponApplied, setCouponApplied] = useState(false);
 
-  async function handleLogout() {
-    await logOut();
-    navigate("/");
-  }
-
-  const cleanAmount = useMemo(() => {
-    if (!amount) return "0.00";
-    return parseAmount(amount).toFixed(2);
-  }, [amount]);
-
-  const upiLink = useMemo(() => {
-    if (!amount || !orderId) return "";
-    return buildUpiLink(cleanAmount, PA, PN, {
-      note: `FlowPay Order`,
-    });
-  }, [cleanAmount, orderId]);
-
-  const prices = useMemo(() => {
-    const pay = amount ? parseAmount(amount) : 0;
-    const savingsNum = Math.round(pay * 0.15); // 15% mockup discount
-    const mrp = pay + savingsNum;
-    const mrpStr = fmt(mrp);
-    const discountStr = fmt(savingsNum);
-    const subStr = fmt(pay);
-    return {
-      pay,
-      savingsRupee: savingsNum,
-      mrpStr,
-      discountStr,
-      subStr,
-    };
-  }, [amount]);
-
+  // Splash delay
   useEffect(() => {
     const t = window.setTimeout(() => setPhase("main"), 2200);
     return () => window.clearTimeout(t);
   }, []);
 
+  // Initial order fetch
   useEffect(() => {
     if (!orderId) return;
     let cancelled = false;
@@ -88,19 +57,21 @@ export default function FlowPayCheckoutPage() {
       try {
         const o = await getOrder(orderId);
         if (cancelled) return;
+        console.log("[FlowPay] Order loaded:", JSON.stringify(o, null, 2));
         setOrder(o);
-        setAmount(o.amount);
         setStatus(o.status);
         if (o.status === "Paid") {
           navigate(`/success/${orderId}`, { replace: true, state: { returnUrl: o.return_url } });
         }
-      } catch {
+      } catch (e) {
+        console.error("[FlowPay] Failed to load order:", e);
         if (!cancelled) setLoadError("Unable to load checkout. Please try again.");
       }
     })();
     return () => { cancelled = true; };
   }, [orderId, navigate]);
 
+  // Poll for payment
   useEffect(() => {
     if (!orderId || status !== "Pending") return;
     const id = window.setInterval(async () => {
@@ -115,220 +86,284 @@ export default function FlowPayCheckoutPage() {
     return () => window.clearInterval(id);
   }, [orderId, status, navigate]);
 
-  function showToast(message: string) {
-    setToast(message);
-    window.setTimeout(() => setToast(null), 2400);
-  }
+  const showToast = useCallback((msg: string) => {
+    setToastMsg(msg);
+    window.setTimeout(() => setToastMsg(null), 2400);
+  }, []);
 
-  async function copyToClipboard(label: string, text: string) {
+  const copyText = useCallback(async (label: string, text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      showToast(`${label} copied`);
+      showToast(`${label} copied!`);
     } catch { showToast("Copy failed"); }
-  }
+  }, [showToast]);
+
+  const amount = order?.amount ?? null;
+  const pay = amount ? parseAmount(amount) : 0;
+  const savingsNum = Math.round(pay * 0.15);
+  const mrp = pay + savingsNum;
+  const upiLink = useMemo(() => {
+    if (!amount || !orderId) return "";
+    return buildUpiLink(fmt(pay), PA, PN, { note: `FlowPay Order` });
+  }, [amount, orderId, pay]);
+
+  const addr = order?.shipping_address;
+  const cust = order?.customer_details;
+  const items = order?.items ?? [];
+  const sessionShort = orderId?.replace(/-/g, "").slice(0, 8) ?? "";
 
   if (!orderId) return null;
+  if (phase === "splash") return <div className={s.page}><FlowPaySplash /></div>;
 
   if (loadError) {
     return (
       <div className={s.page}>
-        <div className={s.card} style={{ margin: "40px auto", maxWidth: 400, textAlign: "center" }}>
-          <p style={{ color: "var(--fp-red)", fontWeight: 600 }}>{loadError}</p>
-          <Link to="/" style={{ display: "inline-block", marginTop: 16, color: "var(--fp-teal-dark)", fontWeight: 700 }}>Back to home</Link>
+        <div className={s.errorBox}>
+          <span className={s.errorIcon}>⚠️</span>
+          <p className={s.errorMsg}>{loadError}</p>
+          <button className={s.retryBtn} onClick={() => window.location.reload()}>Retry</button>
         </div>
       </div>
     );
   }
 
-  if (phase === "splash") return <div className={s.page}><FlowPaySplash /></div>;
-
-  if (!amount) return <div className={s.page}><div style={{ margin: "auto", color: "var(--text-4)" }}>Connecting to secure servers…</div></div>;
-
-  const sessionShort = orderId.replace(/-/g, "").slice(0, 8);
+  if (!order) {
+    return (
+      <div className={s.page}>
+        <div className={s.loadingBox}>
+          <Loader2 size={32} className={s.spinner} />
+          <p className={s.loadingText}>Connecting to secure servers…</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={s.page}>
-      <OrderSummaryModal
-        open={orderSummaryOpen}
-        onClose={() => setOrderSummaryOpen(false)}
-        mrp={prices.mrpStr}
-        discount={prices.discountStr}
-        subtotal={prices.subStr}
-        items={order?.items}
-      />
+      {/* ── Toast ── */}
+      {toastMsg && <div className={s.toast}>{toastMsg}</div>}
 
+      {/* ── Header ── */}
       <header className={s.header}>
-        <button type="button" className={s.back} onClick={() => navigate("/")} aria-label="Back">
-          <ChevronLeft size={24} />
-        </button>
-        <img src="/logo.png" alt="FlowPay" className={s.headerLogo} />
+        <div className={s.headerBrand}>
+          <FlowPayMarkSmall />
+          <span className={s.headerTitle}>FlowPay</span>
+        </div>
         <div className={s.securePill}>
-          <ShieldCheck size={14} /> <span>SECURED</span>
+          <ShieldCheck size={13} />
+          <span>SECURED</span>
         </div>
       </header>
 
-      <div className={s.waBar}>⚡ Order now to get ₹{prices.savingsRupee} cashback in FlowPay wallet</div>
-
-      {toast && <div className={s.toastBar}>{toast}</div>}
+      {/* ── Cashback Bar ── */}
+      <div className={s.cashbackBar}>
+        ⚡ Order now to get ₹{savingsNum} cashback in FlowPay wallet
+      </div>
 
       <main className={s.main}>
-        {/* Order Summary */}
-        <button type="button" className={s.summaryCard} onClick={() => setOrderSummaryOpen(true)}>
-          <div className={s.summaryRow}>
-            <div className={s.summaryLeft}>
-              <ShoppingCart size={20} className={s.cartIco} />
-              <div>
-                <div className={s.summaryTitle}>Check Order Summary</div>
-                <span className={s.savedPill}>TOTAL SAVINGS ₹{prices.savingsRupee}</span>
-              </div>
-            </div>
-            <div className={s.summaryRight}>
-              <div>
-                <span className={s.strike}>₹{prices.mrpStr}</span>
-                <span className={s.payStrong}> ₹{prices.subStr}</span>
-                <span className={s.chev}>▼</span>
-              </div>
-            </div>
-          </div>
-        </button>
 
-        <p className={s.sectionLabel}>Shipping & Delivery</p>
-        <section className={s.card}>
-          <div className={s.addrRow}>
-            <div className={s.addrLeft}>
-              <MapPin size={20} className={s.pin} />
-              <div>
-                <div className={s.deliver}>
-                  DELIVERING TO {order?.shipping_address?.full_name || order?.customer_details?.name || "CUSTOMER"}
-                </div>
-                <div className={s.addrText}>
-                  {order?.shipping_address ? (
-                    <>
-                      {order.shipping_address.address_line_1}
-                      {order.shipping_address.address_line_2 && (
-                        <>, {order.shipping_address.address_line_2}</>
-                      )}
-                      {', '}{order.shipping_address.city}, {order.shipping_address.state} — {order.shipping_address.pincode}
-                    </>
-                  ) : "Fetching address details..."}
-                </div>
-                <div className={s.addrMeta}>
-                  {(() => {
-                    const ph = order?.customer_details?.phone || (order?.shipping_address as any)?.phone;
-                    if (!ph) return "+91 XXXXXXXXXX";
-                    // Add +91 prefix if it's a plain 10-digit Indian number
-                    return /^\d{10}$/.test(ph.trim()) ? `+91 ${ph.trim()}` : ph;
-                  })()} · {order?.customer_details?.email || "customer@example.com"}
-                </div>
-              </div>
-            </div>
-            <button type="button" className={s.changeBtn}>CHANGE</button>
+        {/* ════════════════════════════════════════════ */}
+        {/* AMOUNT HERO                                   */}
+        {/* ════════════════════════════════════════════ */}
+        <div className={s.amountHero}>
+          <div className={s.amountLabel}>AMOUNT TO PAY</div>
+          <div className={s.amountValue}>₹{fmt(pay)}</div>
+          <div className={s.amountSaved}>
+            You save ₹{savingsNum} · MRP <s>₹{fmt(mrp)}</s>
           </div>
-          <div className={s.shipBox}>
-            <div className={s.shipLine}>
-              FlowPay Fast Delivery <span className={s.freeBadge}>FREE</span>
-            </div>
-            <div className={s.shipSub}>Arriving by tomorrow evening</div>
-          </div>
-        </section>
-
-        <p className={s.sectionLabel}>Offers & Coupons</p>
-        <div className={s.couponRow}>
-          <Tag size={18} className={s.couponIcon} />
-          <input
-            className={s.couponInput}
-            placeholder="Enter coupon code"
-            value={coupon}
-            onChange={(e) => setCoupon(e.target.value)}
-            disabled={couponApplied}
-          />
-          <button
-            type="button"
-            className={s.changeBtn}
-            disabled={couponApplied || !coupon.trim()}
-            onClick={() => {
-              setCouponApplied(true);
-              showToast("Coupon Applied!");
-            }}
-          >
-            {couponApplied ? "APPLIED ✓" : "APPLY"}
-          </button>
         </div>
 
-        <p className={s.sectionLabel}>Payment Method</p>
-        <section className={s.payCard}>
-          <div className={s.payHead}>
-            <div className={s.payHeadL}>
-              <Smartphone size={20} className={s.upiIco} />
-              <span className={s.payTitle}>UPI / QR / Instant App</span>
+        {/* ════════════════════════════════════════════ */}
+        {/* ORDER ITEMS                                   */}
+        {/* ════════════════════════════════════════════ */}
+        <div className={s.section}>
+          <button
+            type="button"
+            className={s.sectionHeader}
+            onClick={() => setSummaryOpen(v => !v)}
+          >
+            <div className={s.sectionHeaderL}>
+              <Package size={16} className={s.sectionIcon} />
+              <span>Order Summary</span>
+              {items.length > 0 && (
+                <span className={s.badge}>{items.length} item{items.length > 1 ? "s" : ""}</span>
+              )}
             </div>
-            <span className={s.payAmt}>₹{prices.subStr}</span>
-          </div>
+            {summaryOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
 
-          <div className={s.qrRow}>
-            <div className={s.qrBox}>
-              <div className={`${s.qrInner} ${showQr ? s.qrShown : s.qrHidden}`}>
-                <QRCode value={upiLink} size={136} style={{ height: "auto", maxWidth: "100%", width: "100%" }} />
+          {summaryOpen && (
+            <div className={s.itemsBody}>
+              {items.length > 0 ? items.map((item: any, i: number) => (
+                <div key={i} className={s.itemRow}>
+                  {item.image ? (
+                    <img src={item.image} alt={item.name} className={s.itemThumb} />
+                  ) : (
+                    <div className={s.itemThumbPlaceholder}><Package size={20} /></div>
+                  )}
+                  <div className={s.itemMeta}>
+                    <div className={s.itemName}>{item.name}</div>
+                    <div className={s.itemQty}>Qty: {item.quantity}</div>
+                  </div>
+                  <div className={s.itemPrice}>₹{fmt(Number(item.price) * item.quantity)}</div>
+                </div>
+              )) : (
+                <div className={s.noItems}>No item details available</div>
+              )}
+              <div className={s.itemsTotal}>
+                <span>Total</span>
+                <span>₹{fmt(pay)}</span>
               </div>
-              {!showQr && (
-                <button type="button" className={s.showQrBtn} onClick={() => setShowQr(true)}>
-                  <Eye size={20} />
-                  <span>SHOW QR CODE</span>
+            </div>
+          )}
+        </div>
+
+        {/* ════════════════════════════════════════════ */}
+        {/* SHIPPING ADDRESS                             */}
+        {/* ════════════════════════════════════════════ */}
+        <div className={s.section}>
+          <div className={s.sectionHeaderStatic}>
+            <MapPin size={16} className={s.sectionIcon} />
+            <span>Shipping & Delivery</span>
+          </div>
+          <div className={s.addrBody}>
+            {addr ? (
+              <>
+                <div className={s.addrName}>
+                  <User size={13} className={s.addrIcon} />
+                  {addr.full_name}
+                </div>
+                <div className={s.addrLine}>
+                  <Home size={13} className={s.addrIcon} />
+                  <span>
+                    {addr.address_line_1}
+                    {addr.address_line_2 ? `, ${addr.address_line_2}` : ""}
+                  </span>
+                </div>
+                <div className={s.addrLine}>
+                  <MapPin size={13} className={s.addrIcon} />
+                  <span>{addr.city}, {addr.state} — {addr.pincode}</span>
+                </div>
+                {cust?.phone && (
+                  <div className={s.addrLine}>
+                    <Phone size={13} className={s.addrIcon} />
+                    <span>{formatPhone(cust.phone)}</span>
+                  </div>
+                )}
+                {cust?.email && (
+                  <div className={s.addrLine}>
+                    <Mail size={13} className={s.addrIcon} />
+                    <span>{cust.email}</span>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className={s.addrMissing}>
+                <Loader2 size={14} className={s.spinner} />
+                <span>Fetching address details…</span>
+              </div>
+            )}
+            <div className={s.deliveryChip}>
+              <CheckCircle size={13} />
+              FlowPay Fast Delivery · <strong>FREE</strong> · Arriving by tomorrow evening
+            </div>
+          </div>
+        </div>
+
+        {/* ════════════════════════════════════════════ */}
+        {/* COUPON                                       */}
+        {/* ════════════════════════════════════════════ */}
+        <div className={s.section}>
+          <div className={s.couponRow}>
+            <Tag size={16} className={s.sectionIcon} />
+            <input
+              className={s.couponInput}
+              placeholder="Enter coupon code"
+              value={coupon}
+              onChange={e => setCoupon(e.target.value)}
+              disabled={couponApplied}
+            />
+            <button
+              type="button"
+              className={s.couponBtn}
+              disabled={couponApplied || !coupon.trim()}
+              onClick={() => { setCouponApplied(true); showToast("Coupon Applied!"); }}
+            >
+              {couponApplied ? "APPLIED ✓" : "APPLY"}
+            </button>
+          </div>
+        </div>
+
+        {/* ════════════════════════════════════════════ */}
+        {/* PAYMENT — QR                                 */}
+        {/* ════════════════════════════════════════════ */}
+        <div className={s.section}>
+          <div className={s.sectionHeaderStatic}>
+            <Smartphone size={16} className={s.sectionIcon} />
+            <span>Pay via UPI</span>
+            <span className={s.payAmtPill}>₹{fmt(pay)}</span>
+          </div>
+          <div className={s.payBody}>
+            {/* Live status */}
+            <div className={s.liveRow}>
+              <span className={s.pulseDot} />
+              <span>WAITING FOR PAYMENT</span>
+            </div>
+
+            {/* QR */}
+            <div className={s.qrWrap}>
+              <div className={s.qrFrame}>
+                <div className={showQr ? s.qrVisible : s.qrBlurred}>
+                  <QRCode value={upiLink} size={160} style={{ width: "100%", height: "auto" }} />
+                </div>
+                {!showQr && (
+                  <button type="button" className={s.qrReveal} onClick={() => setShowQr(true)}>
+                    <Eye size={22} />
+                    <span>TAP TO REVEAL QR</span>
+                  </button>
+                )}
+              </div>
+              {showQr && (
+                <button type="button" className={s.hideQr} onClick={() => setShowQr(false)}>
+                  <EyeOff size={12} /> Hide QR
                 </button>
               )}
             </div>
 
-            <div className={s.qrCopy}>
-              <div className={s.liveIndicator}>
-                <span className={s.pulseDot}></span>
-                <span>WAITING FOR PAYMENT</span>
-              </div>
-              
-              <p className={s.qrInstr}>Scan the QR above using any UPI app (GPay, PhonePe, Paytm, etc.) to complete your secure transaction.</p>
-              
-              <div className={s.miniActions}>
-                <button type="button" className={s.ghostBtn} onClick={() => copyToClipboard("UPI ID", PA)}>
-                  <Copy size={12} style={{ marginRight: 4 }} /> Copy UPI ID
-                </button>
-                <button type="button" className={s.ghostBtn} onClick={() => copyToClipboard("Order", orderId)}>
-                  <Copy size={12} style={{ marginRight: 4 }} /> Copy Order ID
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
+            <p className={s.qrHelp}>
+              Open <strong>GPay · PhonePe · Paytm · BHIM</strong> and scan to pay
+            </p>
 
-        <div className={s.userCard}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 32, height: 32, borderRadius: "50%", background: "var(--bg-alt)", display: "flex", alignItems: "center", justifyContent: "center", fontStyle: "normal" }}>👤</div>
-            <div style={{ fontSize: "0.875rem", color: "var(--text-2)" }}>
-              {user ? <span>Logged in as <b>{user.email}</b></span> : <span>Checking out as Guest</span>}
+            <div className={s.copyRow}>
+              <button type="button" className={s.copyBtn} onClick={() => copyText("UPI ID", PA)}>
+                <Copy size={12} /> Copy UPI ID
+              </button>
+              <button type="button" className={s.copyBtn} onClick={() => copyText("Order ID", orderId)}>
+                <Copy size={12} /> Copy Order ID
+              </button>
             </div>
           </div>
-          <button type="button" className={s.logout} style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--fp-red)", background: "none", border: "none", cursor: "pointer" }} onClick={() => void handleLogout()}>
-            <LogOut size={14} style={{ marginRight: 4, display: "inline" }} /> LOGOUT
-          </button>
         </div>
 
-        <div className={s.poweredBlock}>
-          <div className={s.poweredArc}>POWERED BY</div>
-          <div className={s.poweredRow}>
+        {/* ════════════════════════════════════════════ */}
+        {/* FOOTER                                       */}
+        {/* ════════════════════════════════════════════ */}
+        <div className={s.footer}>
+          <div className={s.poweredBy}>
+            <span className={s.poweredLabel}>POWERED BY</span>
             <FlowPayMarkSmall />
-            <span className={s.poweredName}>FLOWPAY PRODUCTION SDK 2.0</span>
+            <span className={s.poweredName}>FlowPay SDK 2.0</span>
           </div>
+          <div className={s.trustRow}>
+            <span className={s.trustItem}><ShieldCheck size={10} /> PCI COMPLIANT</span>
+            <span className={s.trustItem}>🔒 SECURE</span>
+            <span className={s.trustItem}><Clock size={10} /> 24/7 SUPPORT</span>
+          </div>
+          <div className={s.refRow}>REF: {sessionShort}</div>
+          <p className={s.legal}>By proceeding you agree to our Terms &amp; Privacy Policy.</p>
+          <p className={s.pollNote}>Payment status updates automatically.</p>
         </div>
 
-        <div className={s.trustRow}>
-          <div className={s.trustItem}><ShieldCheck size={10} style={{ display: "inline" }} /> PCI COMPLIANT</div>
-          <div className={s.trustItem}>🔒 SECURE</div>
-          <div className={s.trustItem}>✓ VERIFIED</div>
-        </div>
-
-        <div className={s.sessionId}>REF: {sessionShort}</div>
-        <p className={s.legal}>
-          By clicking pay you agree to our <u>Terms</u> and <u>Privacy Policy</u>.
-        </p>
-        <p className={s.pollNote}>Status will update immediately once payment is confirmed.</p>
       </main>
     </div>
   );
