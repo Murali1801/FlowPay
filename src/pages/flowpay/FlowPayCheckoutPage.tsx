@@ -202,12 +202,23 @@ export default function FlowPayCheckoutPage() {
                   DELIVERING TO {order?.shipping_address?.full_name || order?.customer_details?.name || "CUSTOMER"}
                 </div>
                 <div className={s.addrText}>
-                  {order?.shipping_address
-                    ? `${order.shipping_address.address_line_1}, ${order.shipping_address.city}, ${order.shipping_address.state} - ${order.shipping_address.pincode}`
-                    : "Fetching address details..."}
+                  {order?.shipping_address ? (
+                    <>
+                      {order.shipping_address.address_line_1}
+                      {order.shipping_address.address_line_2 && (
+                        <>, {order.shipping_address.address_line_2}</>
+                      )}
+                      {', '}{order.shipping_address.city}, {order.shipping_address.state} — {order.shipping_address.pincode}
+                    </>
+                  ) : "Fetching address details..."}
                 </div>
                 <div className={s.addrMeta}>
-                  {order?.customer_details?.phone || order?.shipping_address?.phone || "+91 XXXXXXXXXX"} · {order?.customer_details?.email || "customer@example.com"}
+                  {(() => {
+                    const ph = order?.customer_details?.phone || (order?.shipping_address as any)?.phone;
+                    if (!ph) return "+91 XXXXXXXXXX";
+                    // Add +91 prefix if it's a plain 10-digit Indian number
+                    return /^\d{10}$/.test(ph.trim()) ? `+91 ${ph.trim()}` : ph;
+                  })()} · {order?.customer_details?.email || "customer@example.com"}
                 </div>
               </div>
             </div>
